@@ -1,0 +1,187 @@
+{
+  "id": "react2shell",
+  "title": "React2Shell — Flight 协议反序列化导致未授权 RCE",
+  "subtitle": "CVE-2025-55182",
+  "cves": ["CVE-2025-55182"],
+  "hasCve": true,
+  "kind": "组件自身缺陷（反序列化 / 原型链污染，非应用层前提）",
+  "severity": {
+    "v31": 9.8,
+    "v40": 10.0,
+    "label": "Critical（CISA KEV 已收录）"
+  },
+  "baseline": "react-server-dom-* 的 Flight reply 反序列化器信任了 JSON 中描述响应对象自身的字段：攻击者用 \"then\":\"$1:__proto__:then\" 污染 Object.prototype.then 使普通对象被当作 thenable，再用 \"$1:constructor:constructor\" 沿原型链取到 Function 构造函数，把 _prefix 当函数体交给 new Function() 执行。19.2.1 改为 hasOwnProperty 守卫 + RESPONSE_SYMBOL 私有符号，使伪造 chunk 无法再携带伪造的 _response。",
+  "stages": [
+    {
+      "id": "S1",
+      "name": "线索归一",
+      "status": "done",
+      "summary": "直接核对 npm registry 与修复提交，纠正了一条常见误传。",
+      "evidence": [
+        "权威来源：React 官方公告、修复提交 7dc903cd、NVD、CISA KEV（2025-12-05 收录）",
+        "受影响：react-server-dom-webpack/parcel/turbopack 19.0.0 / 19.1.0 / 19.1.1 / 19.2.0",
+        "修复：19.0.1 / 19.1.2 / 19.2.1（均在 2025-12-03 的 6 分钟内发布）",
+        "纠正误传：14.2.35 / 15.0.8 / 15.1.12 / 16.0.11 是 12-11 的 DoS 修复线（-55184 / -55183），不是本次 RCE",
+        "Next.js RCE 修复线：15.0.5 / 15.1.9 / 15.2.6 / 15.3.6 / 15.4.8 / 15.5.7 / 16.0.7",
+        "next@14.2.x stable 不受影响：dist/compiled 里没有 Flight reply 解析器（无 reviveModel）"
+      ]
+    },
+    {
+      "id": "S2",
+      "name": "产品/版本矩阵",
+      "status": "done",
+      "summary": "锁定 Next.js App Router 作为真实载体，并识别 15.5.6→15.5.7 为干净的单步因果边界。",
+      "evidence": [
+        "next 15.5.4 / 15.5.6 的 Flight 反序列化器字节完全相同（同 sha256 c585e71d…，102995 字节）",
+        "15.5.7 起 initializingChunkBlockedModel / Chunk.prototype.then / chunk._response 标记数归零",
+        "resolveModelChunk 作为同模块对照，四个版本均为 4 —— 排除\"整模块差异\"的误读"
+      ]
+    },
+    {
+      "id": "S3",
+      "name": "镜像与靶场",
+      "status": "done",
+      "summary": "专用 r2s- 前缀与 194xx 端口段，5 个容器覆盖漏洞版与修复版。",
+      "evidence": [
+        "容器前缀 r2s-，端口段 19400–19499，与本机 9 个无关容器（sp-* / cve-* / ddns-go）隔离",
+        "r2s-next-1554-noaction :19401（漏洞版）、1554-withaction :19402、1556 :19404",
+        "r2s-next-1557-noaction :19405（修复）、15510 :19403（修复）"
+      ]
+    },
+    {
+      "id": "S4",
+      "name": "前提判定",
+      "status": "done",
+      "summary": "判定为组件自身缺陷：零 Server Action 的应用照样打穿，三条实验证据支撑。",
+      "evidence": [
+        "证据1：仅调用 decodeReply() 的最小引擎宿主即可打穿（19.2.0 5/5，19.2.1 0/5）",
+        "证据2：next 15.5.4 无 Server Action 应用（manifest 为空、grep 'use server' 零命中）仍 5/5 拿到 root",
+        "证据3：代码路径支持 —— decodeReplyFromBusboy 在 getActionModIdOrError 之前执行，动作表为空也拦不住反序列化",
+        "关闭反例：路径扫描 /、/favicon.ico、/api/whatever、/nonexistent-deep/path 均可打，端点不是门槛",
+        "判据：Next-Action 头必须存在但其值任意（用字符串 x），无需对应真实 Server Action"
+      ]
+    },
+    {
+      "id": "S5",
+      "name": "靶场化验证",
+      "status": "done",
+      "summary": "漏洞版全中、修复版全灭，且修复版是立即 404 而非挂起。",
+      "evidence": [
+        "引擎级 19.2.0 5/5；19.2.1（修复）0/5",
+        "next 15.5.4 noaction 5/5、withaction 3/3、15.5.6 noaction 5/5",
+        "next 15.5.7（相邻修复版）0/5、15.5.10 0/5",
+        "路径扫描 4/5（/404 未命中，原因未查明，已列入限制）",
+        "去掉 Next-Action 头 → 0/3（该变体确实需要真实动作 ID）",
+        "判定口径：成功只以容器内出现含 id 输出的文件为准，绝不看 HTTP 状态码"
+      ]
+    },
+    {
+      "id": "S6",
+      "name": "打穿与 exp",
+      "status": "done",
+      "summary": "拿到 root 并交付持久交互式 shell。",
+      "evidence": [
+        "打穿用户为 root（uid=0），因官方 node:22-bookworm-slim 默认以 root 跑 next start",
+        "持久 shell：r2s_revshell.sh，真 /bin/sh -i，cd 与环境变量跨命令保留",
+        "gadget 仅用 process.mainModule.require('child_process')；未采用需要开发者已暴露危险功能的 vm 类 gadget"
+      ]
+    },
+    {
+      "id": "S7",
+      "name": "结论与边界",
+      "status": "done",
+      "summary": "组件级 RCE 成立；单 worker 结论不外推，反向 shell 依赖回连网关。",
+      "evidence": [
+        "单 next start 进程，无 cluster / 反向代理 / WAF，不可外推到多 worker 生产环境",
+        "仅测 Node.js runtime；Edge runtime、parcel、turbopack、waku、rwsdk 均未实测",
+        "未测 standalone 输出、nginx/Traefik 前置、多副本负载均衡",
+        "反向 shell 依赖容器回连 docker bridge 网关（172.18.0.1），真实环境通常出网受限",
+        "CVE 归属：CVE-2025-55182；Next.js 侧 CVE-2025-66478 已被 REJECT，是重复"
+      ]
+    }
+  ],
+  "products": [
+    {
+      "name": "react-server-dom-webpack 19.2.0",
+      "image": "本机引擎靶场（仅调用 decodeReply）",
+      "runtime": "Node.js 22",
+      "status": "hit",
+      "result": "5/5 RCE"
+    },
+    {
+      "name": "Next.js 15.5.4（零 Server Action）",
+      "image": "r2s-next-1554-noaction",
+      "runtime": "next 15.5.4",
+      "status": "hit",
+      "result": "5/5，root"
+    },
+    {
+      "name": "Next.js 15.5.4（1 个 Server Action）",
+      "image": "r2s-next-1554-withaction",
+      "runtime": "next 15.5.4",
+      "status": "hit",
+      "result": "3/3，root"
+    },
+    {
+      "name": "Next.js 15.5.6（零 Server Action）",
+      "image": "r2s-next-1556-noaction",
+      "runtime": "next 15.5.6",
+      "status": "hit",
+      "result": "5/5"
+    },
+    {
+      "name": "Next.js 15.5.7（相邻修复版）",
+      "image": "r2s-next-1557-noaction",
+      "runtime": "next 15.5.7",
+      "status": "control-fail",
+      "result": "0/5，立即 404（符合预期）"
+    },
+    {
+      "name": "Next.js 15.5.10（修复版）",
+      "image": "r2s-next-15510-noaction",
+      "runtime": "next 15.5.10",
+      "status": "control-fail",
+      "result": "0/5（符合预期）"
+    },
+    {
+      "name": "react-server-dom-webpack 19.2.1（修复）",
+      "image": "本机引擎靶场",
+      "runtime": "Node.js 22",
+      "status": "control-fail",
+      "result": "0/5（符合预期）"
+    },
+    {
+      "name": "Next.js 14.2.x stable",
+      "image": "—",
+      "runtime": "next 14.2.x",
+      "status": "unevaluated",
+      "result": "不含 Flight reply 解析器，结构上不适用；未搭建"
+    }
+  ],
+  "productsSummary": {
+    "attempted": 8,
+    "hit": 4,
+    "controlFail": 3,
+    "unevaluated": 1,
+    "note": "漏洞版合计 18/18 全中，修复版合计 0/11 全灭；15.5.6→15.5.7 为单步因果边界"
+  },
+  "limits": [
+    "单 worker：靶场是单个 next start 进程，无 cluster / 反向代理 / WAF，命中率不可外推到生产",
+    "/404 路径未命中（路径扫描 4/5），原因未查明，不影响任意存在路径可打的结论",
+    "仅测 Node.js runtime；Edge runtime、parcel、turbopack、waku、rwsdk 均未实测",
+    "未测 standalone 输出、nginx/Traefik 前置、多副本负载均衡",
+    "反向 shell 依赖容器回连 docker bridge 网关，真实环境出网通常受限",
+    "gadget 链只验证了一条，未穷举"
+  ],
+  "demo": {
+    "available": true,
+    "targetKey": "r2s-next-1554",
+    "targetLabel": "r2s-next-1554-noaction (next@15.5.4, 漏洞版)",
+    "detail": "对本地 r2s- 靶场真实执行 Flight 反序列化利用；成功以容器内出现 id 输出为准，不看 HTTP 状态码。",
+    "shell": {
+      "kind": "rce",
+      "available": true,
+      "note": "逐命令 RCE：每条命令重跑一次利用，不保留 cd/env；真会话可用 r2s_revshell.sh"
+    }
+  }
+}

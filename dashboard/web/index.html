@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>漏洞复现结果站</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="dot"></span>
+    <strong>vuln-repro</strong>
+    <span class="muted">漏洞线索 → 打穿 结果站</span>
+  </div>
+  <div class="topbar-meta">
+    <span id="targetsState" class="muted">检查靶场…</span>
+  </div>
+</header>
+
+<main class="layout">
+  <aside class="sidebar">
+    <div class="side-label">案例</div>
+    <nav id="caseList" class="case-list"></nav>
+    <div class="side-label" style="margin-top:28px">靶场状态</div>
+    <div id="targetList" class="target-list"></div>
+  </aside>
+
+  <section class="content">
+    <div id="hero" class="hero">
+      <h1>选择左侧案例</h1>
+      <p class="muted">展示每个漏洞从线索到打穿的完整流程、成果与真实 EXP 演示。</p>
+    </div>
+    <div id="caseView" hidden></div>
+  </section>
+
+  <!-- Resize handle: the demo panel width is user-adjustable and remembered. -->
+  <div id="demoResizer" class="demo-resizer" role="separator" aria-orientation="vertical"
+       tabindex="0" title="拖动调整演示面板宽度（双击复位）"></div>
+
+  <!-- Demo side panel: attacker host first, victim shell only after the exp
+       succeeds. Interaction lives here on the side, not in the reading column. -->
+  <aside id="demoSide" class="demo-side">
+    <div class="demo-side-head">
+      <div>
+        <div class="demo-side-title">
+          <span id="phaseDot" class="live-dot"></span>
+          <strong>演示实例</strong>
+        </div>
+        <div class="muted small" id="demoTargetLabel">选择案例后可用</div>
+      </div>
+      <button id="demoReset" class="btn ghost small-btn" disabled>重置</button>
+    </div>
+
+    <div id="demoHint" class="demo-hint">
+      连接后先进入<b>宿主机伪 shell</b>；在宿主机上执行 exp，成功后才进入受害者的正常 shell。
+    </div>
+
+    <div id="term" class="term" hidden>
+      <div id="termOut" class="term-out"></div>
+
+      <!-- Host (attacker) state: no manual input, only run the exp. -->
+      <div id="hostRow" class="term-inputrow host-row">
+        <button id="expBtn" class="btn primary" disabled>▶ 执行 exp</button>
+        <span class="muted small" id="hostNote">宿主机伪 shell：不可手动输入</span>
+      </div>
+
+      <!-- Victim state: the real interactive shell. -->
+      <div id="victimRow" class="term-inputrow" hidden>
+        <span class="prompt-label">victim$</span>
+        <input id="termInput" class="term-input" autocomplete="off" spellcheck="false"
+               placeholder="输入命令后回车（如 id、pwd、ls /）">
+      </div>
+    </div>
+
+    <div id="verdict" class="verdict" hidden></div>
+  </aside>
+</main>
+
+<script src="/app.js"></script>
+</body>
+</html>

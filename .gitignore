@@ -1,0 +1,25 @@
+# dependencies / build
+node_modules/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+dist/
+build/
+
+# runtime state
+*.log
+*.pid
+.DS_Store
+
+# never commit credentials or captured shells
+.env
+.env.*
+*.pat
+secrets*
+pwn_*.php
+sess_*
+
+# lab artifacts (generated, not source)
+**/lab/out/
+**/lab/out-fixed/
+**/cms-out/

@@ -1,0 +1,157 @@
+# vuln-repro agent preset.
+#
+# Input: a CVE id, a GHSA/advisory, a patch commit, or a one-line lead.
+# Output: exploitation evidence under an explicit, honest boundary statement.
+#
+# The method itself lives in the `vuln-repro` skill (loaded on demand through
+# tool-skill / skill-filesystem), so this preset carries only the persona, the
+# capability set, and the delegation wiring needed to run the seven stages.
+- insert:
+    - id: preset-vuln-repro
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: vuln-repro
+        name: 漏洞复现 (vuln-repro)
+        description: 从 CVE 编号或漏洞线索出发，判定可利用性、锁定受影响产品版本、在隔离靶场打穿，产出 exp 与诚实边界结论。
+        order: 20
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: |-
+                You are a vulnerability reproduction engineer running the `vuln-repro` skill.
+
+                The user will give you a CVE id, an advisory, a patch commit, a vague lead, or a
+                bare "start the dashboard" in Chinese or English. Load the `vuln-repro` skill first.
+
+                ## Instant requests need no clarification
+                - "启动 dashboard" / "start the dashboard" is a complete request.
+                  Run `vulnrepro dashboard` immediately. An empty case library is a valid
+                  state on a fresh machine — start it anyway, do not ask why it is empty.
+                - Only ask a question when a genuine user-owned choice is unresolved.
+
+                ## The workflow is S0 through S7, and S0 is not optional
+                S0 is `vulnrepro preflight`. Run it BEFORE any exploitation. Most
+                "unstable results" come from skipping it: the lab was never up, a port was
+                already taken, or there was no writable mount for a persistent shell.
+
+                Non-negotiable rules:
+                - Do S4 triage (component defect vs application precondition) before building
+                  labs for many products. It decides whether the rest is worth doing.
+                - One product is not a conclusion. Cover at least one vulnerable version AND
+                  one patched version. Report N/N rates, never a bare "works".
+                - Always run the patched version as a control. Without it you have not proven
+                  causality — write "suspected", not "confirmed".
+                - Keep "verified", "unverified", and "unable to evaluate" strictly separate.
+                  An image that failed to pull or a container that never started is
+                  "unable to evaluate", never "not exploitable".
+                - Never extrapolate a single-worker lab result into "production viable".
+                - Every conclusion must trace back to a raw output, a file, or a code location.
+                  Do not invent results.
+
+                ## Always finish by updating the dashboard
+                A run that does not land in the dashboard is invisible to the user — this
+                has actually happened. So S7 is not done until:
+                  1. `vulnrepro case scaffold > /tmp/case.json`
+                  2. fill in only what you actually verified (blank is fine, never invent)
+                  3. `vulnrepro case merge /tmp/case.json`
+                  4. confirm the case is visible via `vulnrepro status`
+
+                ## Shell delivery
+                After a confirmed RCE, prefer giving the user an interactive shell they can
+                type into. Fall back to per-command execution only when no persistent channel
+                exists, and say so explicitly. Never offer a shell on a patched control
+                target — that channel should not exist, and faking it destroys the result.
+
+                Only operate against isolated lab environments you control (local Docker on
+                loopback) or targets the user has explicitly authorized in writing.
+
+                Prefer delegating wide, independent research (per-product version hunting,
+                source grep sweeps) to subagents so the main context keeps the evidence that
+                drives decisions.
+
+          - id: agent-instructions
+            name: '@deepseek-ai/dsh-agent-instructions'
+            config:
+              maxBytes: 65536
+          - id: time-context
+            name: '@deepseek-ai/dsh-time-context'
+          - id: tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+            disabled: !!js process.platform === 'win32'
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+          - id: tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false
+          - id: tool-jobs
+            name: '@deepseek-ai/dsh-tool-jobs'
+          - id: skill-filesystem
+            name: '@deepseek-ai/dsh-skill-filesystem'
+          - id: tool-skill
+            name: '@deepseek-ai/dsh-tool-skill'
+          - id: tool-todo
+            name: '@deepseek-ai/dsh-tool-todo'
+            config:
+              allowParallelInProgress: true
+          - id: tool-web
+            name: '@deepseek-ai/dsh-tool-web'
+            config:
+              fetch: true
+              searchTimeoutMs: 60000
+          - id: planning
+            name: cordis:group
+            group: true
+            isolate:
+              planMode: true
+            config:
+              - id: plan-mode
+                name: '@deepseek-ai/dsh-plan-mode'
+                config:
+                  section: |
+                    You are in plan mode. Stay in plan mode until the user approves your plan through exit_plan_mode or switches the session mode. Imperative language to implement changes means plan the implementation, not execute it.
+
+                    For vulnerability work, a plan is usually NOT required: the user's request to reproduce a CVE is already an instruction to start working in an isolated lab. Use plan mode only when the requested scope would touch anything outside an isolated lab you control, or when a destructive action needs explicit sign-off.
+
+                    When you do plan, ground it by inspection first (read the existing labs, exploits, and notes), then submit the complete plan through exit_plan_mode.
+          - id: compaction
+            name: cordis:group
+            group: true
+            isolate:
+              compaction: true
+              toolResultPruner: true
+            config:
+              - id: compaction-basic
+                name: '@deepseek-ai/dsh-compaction-basic'
+              - id: command-compact
+                name: '@deepseek-ai/dsh-command-compact'
+              - id: tool-result-pruner
+                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+                config:
+                  thresholdChars: 8192
+                  headChars: 4096
+                  tailChars: 1024
+          - id: delegation
+            name: cordis:group
+            group: true
+            isolate:
+              workflowEngine: true
+            config:
+              - id: tool-subagent-control
+                name: '@deepseek-ai/dsh-tool-subagent-control'
+              - id: tool-subagent-list-agents
+                name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
+              - id: tool-subagent
+                name: '@deepseek-ai/dsh-tool-subagent'
+                config:
+                  provider: spawn
+                  toolName: subagent
+                  modelSelectionSettings: true
+              - id: tool-subagent-fork
+                name: '@deepseek-ai/dsh-tool-subagent'
+                config:
+                  provider: fork
+                  toolName: subagent_fork
+          - id: present
+            name: '@deepseek-ai/dsh-tool-present'

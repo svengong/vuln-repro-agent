@@ -1,0 +1,188 @@
+{
+  "id": "php2shell",
+  "title": "PHP2Shell — OOM / 陈旧全局状态导致引擎级 RCE",
+  "subtitle": "CVE-2026-109618 / CVE-2026-109619",
+  "cves": [
+    "CVE-2026-109618",
+    "CVE-2026-109619"
+  ],
+  "hasCve": true,
+  "kind": "引擎级内存安全缺陷 (CWE-416)",
+  "severity": {
+    "v31": 9.8,
+    "v40": 9.2,
+    "label": "Critical"
+  },
+  "baseline": "修复提交 31c0ea7d：Zend/zend_alloc.c +527/−124，OOM 的 longjmp 换成 UnwindExit，引入 zend_oom_info 状态机与 femalloc 系列可失败分配。",
+  "stages": [
+    {
+      "id": "S1",
+      "name": "线索归一",
+      "status": "done",
+      "summary": "从修复提交 diff 反推根因；按分支列出修复版本。",
+      "evidence": [
+        "修复提交：31c0ea7d (Fix GHSA-w8hw-w9fx-j79w / GHSA-6wmf-4rv5-p3rp)",
+        "修复版本：8.5.12 / 8.4.27 / 8.3.36 / 8.2.35；7.3 及更早无",
+        "受影响判据：8.2 < 8.2.35、8.3 < 8.3.36、8.4 < 8.4.27、8.5 < 8.5.12"
+      ]
+    },
+    {
+      "id": "S2",
+      "name": "产品/版本矩阵",
+      "status": "done",
+      "summary": "锁定 5 个真实产品；关键发现是所有 latest 标签已被重建为修复版。",
+      "evidence": [
+        "latest 全线失效：wordpress:php8.2→8.2.35、drupal:10→8.4.27、mediawiki:lts→8.3.36、joomla:latest→8.4.27、phpmyadmin:latest→8.3.36",
+        "必须使用 2026-10 之前构建的旧标签"
+      ]
+    },
+    {
+      "id": "S3",
+      "name": "镜像获取",
+      "status": "done",
+      "summary": "5 个产品全部获取到漏洞版镜像；两个无对应标签的产品用源码叠加。",
+      "evidence": [
+        "wordpress:6.8-php8.4-apache → PHP 8.4.15",
+        "drupal:10.5-php8.4-apache → PHP 8.4.23",
+        "joomla:6.1.2-php8.4-apache → PHP 8.4.24",
+        "mediawiki:1.45 + php:8.4.15-apache",
+        "phpmyadmin:5.2.3-apache + php:8.4.15-apache"
+      ]
+    },
+    {
+      "id": "S4",
+      "name": "前提判定",
+      "status": "done",
+      "summary": "判定为引擎自身缺陷：应用代码只有 echo \"OK\"，无任何应用层漏洞，依然可打穿。",
+      "evidence": [
+        "基准靶场 index.php 仅 `<?php echo \"OK\\n\"; ?>`",
+        "结论：不需要应用层前提，值得全量投入"
+      ]
+    },
+    {
+      "id": "S5",
+      "name": "靶场化验证",
+      "status": "done",
+      "summary": "漏洞版 3/3 成功，修复版 3/3 失败；cookie 大小即为判据。",
+      "evidence": [
+        "php:8.4.26-apache → 3/3 成功，拿到 uid=33",
+        "php:8.4.27-apache → 3/3 在地址泄露阶段失败",
+        "判据：cookie ≈ 32B 不可用；≈ 600000B 可打穿",
+        "8.2.x / 8.3.x / 7.x 结构上不成立"
+      ]
+    },
+    {
+      "id": "S6",
+      "name": "打穿与 exp",
+      "status": "done",
+      "summary": "5/5 产品打穿；踩过 4 个真实坑并全部修正。",
+      "evidence": [
+        "坑1 模块指针：泄露的是 base+dtor+0xb 而非函数入口",
+        "坑2 output_buffering=true 破坏泄露窗口（32B vs 600000B）",
+        "坑3 ASLR 硬编码 0x7f 假设导致 leak 全灭，改 0x55..0x80 区间",
+        "坑4 phpMyAdmin 必须用 /show_config_errors.php",
+        "单次 RCE 限 14 字节，长命令走 stager"
+      ]
+    },
+    {
+      "id": "S7",
+      "name": "结论与边界",
+      "status": "done",
+      "summary": "已验证/未验证分离；单 worker 结论不外推生产。",
+      "evidence": [
+        "多 worker 下命中率显著下降（公开测试 leak 6/10、fire 0/20）",
+        "仅实测 memory_limit=8M；128M 未针对这些产品实测",
+        "纯黑盒仍需本地 libphp.so 提取符号偏移"
+      ]
+    }
+  ],
+  "products": [
+    {
+      "name": "WordPress",
+      "image": "wordpress:6.8-php8.4-apache",
+      "runtime": "PHP 8.4.15",
+      "status": "hit",
+      "result": "拿到 uid=33"
+    },
+    {
+      "name": "Drupal",
+      "image": "drupal:10.5-php8.4-apache",
+      "runtime": "PHP 8.4.23",
+      "status": "hit",
+      "result": "拿到 uid=33"
+    },
+    {
+      "name": "Joomla",
+      "image": "joomla:6.1.2-php8.4-apache",
+      "runtime": "PHP 8.4.24",
+      "status": "hit",
+      "result": "3/3 稳定"
+    },
+    {
+      "name": "MediaWiki",
+      "image": "mediawiki:1.45 + php:8.4.15-apache",
+      "runtime": "PHP 8.4.15",
+      "status": "hit",
+      "result": "拿到 uid=33"
+    },
+    {
+      "name": "phpMyAdmin",
+      "image": "phpmyadmin:5.2.3 + php:8.4.15-apache",
+      "runtime": "PHP 8.4.15",
+      "status": "hit",
+      "result": "3/3 稳定（经 show_config_errors.php）"
+    },
+    {
+      "name": "PHP 基准靶场",
+      "image": "php:8.4.26-apache",
+      "runtime": "PHP 8.4.26",
+      "status": "hit",
+      "result": "3/3 成功"
+    },
+    {
+      "name": "PHP 修复对照",
+      "image": "php:8.4.27-apache",
+      "runtime": "PHP 8.4.27",
+      "status": "control-fail",
+      "result": "3/3 失败（符合预期）"
+    },
+    {
+      "name": "WordPress latest",
+      "image": "wordpress:php8.2-apache",
+      "runtime": "PHP 8.2.35",
+      "status": "miss",
+      "result": "标签已重建为修复版"
+    },
+    {
+      "name": "Drupal latest",
+      "image": "drupal:10-apache",
+      "runtime": "PHP 8.4.27",
+      "status": "miss",
+      "result": "标签已重建为修复版"
+    }
+  ],
+  "productsSummary": {
+    "attempted": 9,
+    "hit": 6,
+    "controlFail": 1,
+    "miss": 2,
+    "note": "5 个真实产品全部打穿（0 miss）；剩余为修复对照与已重建的 latest 标签"
+  },
+  "limits": [
+    "所有测试在单 worker 下完成；多 worker 生产环境命中率显著下降，需要 worker saturation",
+    "memory_limit=128M 内置参数但本仓库仅实测 8M",
+    "纯黑盒通用性不足：当前需本地 libphp.so 提取符号偏移",
+    "单次 RCE 限 14 字节，长命令需 stager"
+  ],
+  "demo": {
+    "available": true,
+    "targetKey": "php2shell-base",
+    "targetLabel": "php:8.4.26-apache 基准靶场",
+    "detail": "启动 cve-target 容器后对其真实执行；应用代码只有 echo \"OK\"，不含任何应用层漏洞。",
+    "shell": {
+      "kind": "rce",
+      "available": true,
+      "note": "逐命令 RCE：每条命令重跑利用（数秒），不保留 cd/env 状态"
+    }
+  }
+}

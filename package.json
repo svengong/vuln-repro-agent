@@ -1,0 +1,33 @@
+{
+  "name": "@local/dsh-vuln-repro",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Vulnerability reproduction agent: turns a CVE lead into a verified, clickable demo — with environment preflight, version-matrix discipline, and an integrated dashboard.",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "bin": {
+    "vulnrepro": "./bin/vulnrepro"
+  },
+  "scripts": {
+    "dashboard": "python3 bin/vulnrepro dashboard",
+    "preflight": "python3 bin/vulnrepro preflight",
+    "doctor": "python3 bin/vulnrepro doctor",
+    "test": "python3 tests/run_tests.py"
+  },
+  "files": [
+    "bin",
+    "skill",
+    "dashboard",
+    "docs",
+    "templates",
+    "cordis.patch.yml"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,246 @@
+{
+  "id": "session-poison",
+  "title": "session.upload_progress 投毒 → LFI → RCE",
+  "subtitle": "应用层组合链，未分配 CVE",
+  "cves": [],
+  "hasCve": false,
+  "kind": "CWE-98 / CAPEC-253（应用层 + PHP 配置特性）",
+  "severity": {
+    "v31": 9.8,
+    "v40": 10.0,
+    "label": "Critical（需应用层前提）"
+  },
+  "baseline": "PHP 把 multipart 的 PHP_SESSION_UPLOAD_PROGRESS 值原样写进 session 文件，发生在 request startup、用户代码之前；应用若有用户可控 include() 即可执行其中的 PHP 代码。PHP 侧是文档化设计行为，因此不构成可分配的 CVE。",
+  "stages": [
+    {
+      "id": "S1",
+      "name": "线索归一",
+      "status": "done",
+      "summary": "拆解为五步链条；确认落盘位置与执行时机。",
+      "evidence": [
+        "落盘：<save_path>/sess_<sid> 内的键名 upload_progress_<可控值>",
+        "时机：request startup 阶段，应用未调用 session_start() 也照样创建",
+        "查 NVD：keywordSearch=session.upload_progress 仅命中 CVE-2020-7062（空指针 DoS，无关）"
+      ]
+    },
+    {
+      "id": "S2",
+      "name": "前提判定",
+      "status": "done",
+      "summary": "两个前提成本天差地别——前提①免费，前提②是真正门槛。这是全案最重要的一步。",
+      "evidence": [
+        "前提① upload_progress=1 + save_handler=files：11/11 产品全部默认满足",
+        "前提② 用户可控 include() 汇点：12 个真实产品全部缺失",
+        "结论：先做产品筛查，再决定是否投入搭建靶场"
+      ]
+    },
+    {
+      "id": "S3",
+      "name": "产品筛查",
+      "status": "done",
+      "summary": "14 个应用里只有 2 个打通，且都是刻意做出来的漏洞靶场。",
+      "evidence": [
+        "打通：DVWA v1.10（?page=）、bWAPP v2.2（?language=）",
+        "不可用：WordPress / Drupal / MediaWiki / phpMyAdmin / Kanboard / Roundcube / PrestaShop（前提②全缺）",
+        "有洞被防住：Discuz!（三重防护）、DedeCMS（长度≤6 卡死）、PHPCMS（映射表无直接拼接）",
+        "未能评估（不可计为不可用）：Monica / Typecho / EMlog / OSPOS / Shopware / Moodle / Lsky Pro / DSM"
+      ]
+    },
+    {
+      "id": "S4",
+      "name": "靶场化",
+      "status": "done",
+      "summary": "专属 sp- 命名空间隔离，5 个容器覆盖版本与严苛配置。",
+      "evidence": [
+        "容器：sp-8234 / sp-8335 / sp-8511 / sp-8512 / sp-hard（端口 192xx–196xx）",
+        "sp_lab_down.sh 只删 sp-*，不会误伤其他项目",
+        "sp-hard：cleanup=1 + strict_mode=1，仅竞态可打"
+      ]
+    },
+    {
+      "id": "S5",
+      "name": "验证",
+      "status": "done",
+      "summary": "推翻两个常见误解：cleanup=0 不是必要条件，strict_mode 不能阻断。",
+      "evidence": [
+        "cleanup=1（官方默认）下常规模式失败，但竞态模式成功",
+        "已在 PHP 7.4 / 8.2 / 8.3 / 8.5.11 / 8.5.12 验证竞态成功",
+        "strict_mode 会替换 SID，但 Set-Cookie 当场回显新 SID —— 无法阻断"
+      ]
+    },
+    {
+      "id": "S6",
+      "name": "打穿",
+      "status": "done",
+      "summary": "DVWA 与 bWAPP 上完成「投毒 → LFI → RCE」全链。",
+      "evidence": [
+        "DVWA：?page=../../../../../var/lib/php/sessions/sess_xxx → PWNED:uid=33",
+        "bWAPP：?language=/var/lib/php5/sess_xxx → PWNED:uid=33",
+        "攻击顺序：先匿名投毒 → 再登录 → 最后触发"
+      ]
+    },
+    {
+      "id": "S7",
+      "name": "结论与边界",
+      "status": "done",
+      "summary": "12 个真实产品全灭本身就是有效结论；真实目标画像是手写 PHP 的老式应用。",
+      "evidence": [
+        "CVE 归属：不申请；应挂目标应用自身的 LFI 漏洞",
+        "组件口径 CVSS = 0.0，正是拿不到 CVE 号的技术原因",
+        "唯一有效缓解：session.upload_progress.enabled = 0"
+      ]
+    }
+  ],
+  "products": [
+    {
+      "name": "DVWA v1.10",
+      "image": "vulnerables/web-dvwa",
+      "runtime": "PHP 7.0.30",
+      "status": "hit",
+      "result": "RCE 打通"
+    },
+    {
+      "name": "bWAPP v2.2",
+      "image": "raesene/bwapp",
+      "runtime": "PHP 5.x",
+      "status": "hit",
+      "result": "RCE 打通"
+    },
+    {
+      "name": "PHP 8.2 靶场",
+      "image": "php:8.2.34-apache",
+      "runtime": "PHP 8.2.34",
+      "status": "hit",
+      "result": "干净链 3/3"
+    },
+    {
+      "name": "严格配置靶场",
+      "image": "php:8.2.34-apache (cleanup=1, strict=1)",
+      "runtime": "PHP 8.2.34",
+      "status": "hit",
+      "result": "竞态模式打通"
+    },
+    {
+      "name": "WordPress",
+      "image": "wordpress:php8.2-apache",
+      "runtime": "PHP 8.2",
+      "status": "miss",
+      "result": "前提②确认缺失"
+    },
+    {
+      "name": "Drupal 10",
+      "image": "drupal:10-apache",
+      "runtime": "PHP 8.x",
+      "status": "miss",
+      "result": "前提②确认缺失"
+    },
+    {
+      "name": "MediaWiki",
+      "image": "mediawiki:lts",
+      "runtime": "PHP 8.x",
+      "status": "miss",
+      "result": "前提②确认缺失"
+    },
+    {
+      "name": "phpMyAdmin",
+      "image": "phpmyadmin:latest",
+      "runtime": "PHP 8.x",
+      "status": "miss",
+      "result": "前提②确认缺失"
+    },
+    {
+      "name": "Kanboard",
+      "image": "kanboard/kanboard",
+      "runtime": "PHP 8.x",
+      "status": "miss",
+      "result": "前提②确认缺失"
+    },
+    {
+      "name": "Roundcube",
+      "image": "roundcube/roundcubemail",
+      "runtime": "PHP 8.x",
+      "status": "miss",
+      "result": "前提②确认缺失"
+    },
+    {
+      "name": "PrestaShop",
+      "image": "prestashop/prestashop",
+      "runtime": "PHP 8.x",
+      "status": "miss",
+      "result": "前提②确认缺失"
+    },
+    {
+      "name": "Discuz!",
+      "image": "tencentci/discuz",
+      "runtime": "PHP 5.x",
+      "status": "miss",
+      "result": "有 include 但三重防护拦截"
+    },
+    {
+      "name": "DedeCMS",
+      "image": "kalid/dedecms",
+      "runtime": "PHP 5.6",
+      "status": "miss",
+      "result": "长度≤6 字符，穿越深度不够"
+    },
+    {
+      "name": "PHPCMS",
+      "image": "smartslug/phpcms",
+      "runtime": "PHP 5.x",
+      "status": "miss",
+      "result": "模板映射表，无直接拼接"
+    },
+    {
+      "name": "Monica",
+      "image": "monica",
+      "runtime": "—",
+      "status": "unevaluated",
+      "result": "容器启动即退出"
+    },
+    {
+      "name": "Typecho",
+      "image": "joyqi/typecho",
+      "runtime": "—",
+      "status": "unevaluated",
+      "result": "镜像不存在"
+    },
+    {
+      "name": "EMlog",
+      "image": "emlog/emlog",
+      "runtime": "—",
+      "status": "unevaluated",
+      "result": "镜像拉取失败"
+    },
+    {
+      "name": "群晖 DSM",
+      "image": "现场部署",
+      "runtime": "—",
+      "status": "unevaluated",
+      "result": "不用文件 session，前提①不成立"
+    }
+  ],
+  "productsSummary": {
+    "attempted": 18,
+    "hit": 4,
+    "controlFail": 0,
+    "miss": 10,
+    "unevaluated": 4,
+    "note": "真实产品 0 打通；能打通的都是刻意还原老式写法的漏洞靶场"
+  },
+  "limits": [
+    "未在真实生产站点验证（无授权目标）",
+    "Monica / Typecho / EMlog 等属「未能评估」，不等于不可利用",
+    "真实世界绝大多数部署为 cleanup=1，故竞态才是贴近实际的路径"
+  ],
+  "demo": {
+    "available": true,
+    "targetKey": "sp-clean",
+    "targetLabel": "sp-8234 (php:8.2.34-apache, cleanup=0)",
+    "detail": "对本地 sp- 靶场真实执行：投毒 session 文件 → 经 include 汇点触发 → 回显命令输出。",
+    "shell": {
+      "kind": "webshell",
+      "available": true,
+      "note": "持久 webshell：命令毫秒级，但 cd/env 不跨命令保留"
+    }
+  }
+}
