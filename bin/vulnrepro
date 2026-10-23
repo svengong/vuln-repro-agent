@@ -320,12 +320,23 @@ def main() -> int:
     st = sub.add_parser("status", parents=[common], help="当前状态")
     st.set_defaults(func=cmd_status)
 
+    # Accept `vulnrepro --port 3020` (no subcommand) as "start the dashboard on
+    # that port": the bare invocation is the common case, so the flags that
+    # belong to `dashboard` are also accepted at the top level.
+    ap.add_argument("--port", type=int, default=None,
+                    help="dashboard 端口（默认 3010）")
+    ap.add_argument("--host", default=DEFAULT_HOST, help="dashboard 监听地址")
+    ap.add_argument("--log", default=None, help="dashboard 日志路径")
+    ap.add_argument("--foreground", action="store_true", help="前台运行")
+    ap.add_argument("--timeout", type=int, default=20, help="启动等待秒数")
+
     args = ap.parse_args()
     if not getattr(args, "cmd", None):
-        # 无子命令 → 默认启动 dashboard（"启动 dashboard" 一句话即可）
         args = argparse.Namespace(cmd="dashboard", func=cmd_dashboard,
-                                  host=DEFAULT_HOST, port=DEFAULT_PORT,
-                                  log=None, timeout=20, foreground=False)
+                                  host=args.host,
+                                  port=args.port or DEFAULT_PORT,
+                                  log=args.log, timeout=args.timeout,
+                                  foreground=args.foreground)
     return args.func(args)
 
 
