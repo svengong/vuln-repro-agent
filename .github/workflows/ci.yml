@@ -1,0 +1,45 @@
+# Keep the gates honest: without CI nothing stops a case file from quietly
+# dropping its patched control or a validator from regressing.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 测试套件（门禁行为）
+        run: python3 tests/run_tests.py
+
+      - name: 案例文件校验
+        run: python3 bin/casefile.py validate
+
+      - name: CLI 冒烟
+        run: |
+          python3 bin/vulnrepro --help
+          python3 bin/vulnrepro status
+
+      - name: Node 语法检查
+        run: |
+          node --check dashboard/server.mjs
+          node --check dashboard/shell-backends.mjs
+          node --check dashboard/web/app.js

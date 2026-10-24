@@ -1,9 +1,28 @@
 # vuln-repro-agent
 
-从一条漏洞线索（CVE 编号、advisory、补丁 commit，或一句模糊描述）出发，
-做**环境检测 → 多产品版本矩阵 → 隔离靶场打穿 → 交互式 shell → 可视化管理台**的完整 agent。
+[![CI](https://github.com/svengong/vuln-repro-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/svengong/vuln-repro-agent/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
+[![Zero deps](https://img.shields.io/badge/dependencies-0-brightgreen)](#环境要求)
 
+**从一条 CVE 编号或一句漏洞线索，做到「可点击验证的打穿」——而不是一份看起来很像的 Markdown 报告。**
+
+做**环境检测 → 多产品版本矩阵 → 隔离靶场打穿 → 交互式 shell → 可视化管理台**的完整 agent。
 这不是提示词集合，而是把「结果不稳定」的根因固化成**可执行的门禁**。
+
+> 用它复现过：**CVE-2026-109618 / 109619**（PHP 引擎 RCE）、**CVE-2025-55182**（React Server Components 反序列化 RCE），
+> 以及一条**没有 CVE** 的 `session.upload_progress` → LFI → RCE 应用层链。
+> 每个都带**修复版对照**与**交互式 shell**，并直接落进可视化面板。
+
+### 30 秒看懂它解决什么
+
+| 常见做法 | 本项目 |
+|---|---|
+| 照着 blog 复现一次，写"可 RCE" | 必须 N/N 成功率 + **修复版 0/N 对照** |
+| 只在一个产品上验证 | 强制**多产品版本矩阵**，单产品直接告警 |
+| 靶场没起来，脚本报错 → 写成"不可利用" | S0 环境检测，**区分 `unevaluated` 与 `miss`** |
+| 结论停在终端里，同事看不到 | 强制写进 dashboard，**点一下就能复跑** |
+| 打完给个截图 | 交付**可手动敲命令的交互式 shell** |
 
 ---
 
@@ -68,7 +87,7 @@
 ## 快速开始
 
 ```bash
-git clone <this repo>
+git clone https://github.com/svengong/vuln-repro-agent.git
 cd vuln-repro-agent
 
 # 一句话启动（无子命令即启动 dashboard；已在跑则复用）

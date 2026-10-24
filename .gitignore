@@ -23,3 +23,5 @@ sess_*
 **/lab/out/
 **/lab/out-fixed/
 **/cms-out/
+
+# keep empty scaffolding dirs out until they hold something useful
