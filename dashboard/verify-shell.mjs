@@ -3,11 +3,33 @@
 // Asserts the flow the product promises:
 //   connect -> host pseudo-shell (no manual input, exp button only)
 //           -> exp succeeds -> victim shell (manual input works)
-import { JSDOM } from '/home/sven/workspace/dsh-codebuddy-connect/node_modules/jsdom/lib/api.js'
+// jsdom is only needed for these browser-level checks, so resolve it from a
+// few likely locations instead of hard-coding one machine's path. Skipping is
+// explicit: a missing jsdom prints how to get it rather than crashing.
+const jsdomCandidates = [
+  process.env.JSDOM_PATH,
+  'jsdom',
+  new URL('./node_modules/jsdom/lib/api.js', import.meta.url).pathname,
+  new URL('../node_modules/jsdom/lib/api.js', import.meta.url).pathname,
+]
+
+let JSDOM
+for (const cand of jsdomCandidates) {
+  if (!cand) continue
+  try {
+    ({ JSDOM } = await import(cand))
+    break
+  } catch {}
+}
+
+if (!JSDOM) {
+  console.error('[skip] 需要 jsdom 才能跑渲染检查：npm i -D jsdom，或设置 JSDOM_PATH 指向 jsdom/lib/api.js')
+  process.exit(0)
+}
 import { readFile } from 'node:fs/promises'
 
 const BASE = 'http://127.0.0.1:3010'
-const WEB = '/home/sven/workspace/vuln-dashboard/web'
+const WEB = new URL('./web', import.meta.url).pathname
 
 const dom = new JSDOM(await readFile(WEB + '/index.html', 'utf8'),
   { url: BASE + '/', runScripts: 'outside-only', pretendToBeVisual: true })

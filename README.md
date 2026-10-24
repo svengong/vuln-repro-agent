@@ -7,6 +7,49 @@
 
 ---
 
+## 直接可用的提示词（开箱打穿两个真实 CVE）
+
+装好之后，新建一个会话，选预设 **「漏洞复现 (vuln-repro)」**，然后**把下面任意一句原样发过去**即可。
+不需要补充任何细节——环境检测、靶场搭建、版本矩阵、修复版对照、交互式 shell、
+以及最后写进 dashboard，都由 agent 按 S0–S7 自己完成。
+
+### 提示词 1 · PHP2Shell（CVE-2026-109618 / CVE-2026-109619）
+
+```text
+复现 CVE-2026-109618 和 CVE-2026-109619，用隔离 Docker 靶场打穿，拿到交互式 shell，
+并更新 dashboard。
+```
+
+### 提示词 2 · React2Shell（CVE-2025-55182）
+
+```text
+复现 CVE-2025-55182，重点验证不需要 Server Action 的应用能否打穿，
+带修复版对照，拿到 shell 后更新 dashboard。
+```
+
+### 提示词 3 · 无 CVE 的应用层链（session.upload_progress）
+
+```text
+复现 session.upload_progress 投毒 -> LFI -> RCE，验证 cleanup=1 和 strict_mode=1 是否真能阻断，
+把结论写进 dashboard。
+```
+
+> 只想要面板、不跑漏洞时说一句 `启动面板` 即可，agent 会直接启动 dashboard 并回报案例与靶场状态。
+
+### 打穿后的面板长什么样
+
+右侧「演示实例」从**宿主机伪 shell** 开始（exp 不自动执行），点击「执行 exp」后真实运行利用，
+命中后自动解锁**受害者 shell**，可以直接手敲 `id`、`pwd`：
+
+![面板：拿到 shell](docs/screenshots/dashboard-pwned.png)
+
+上图是在远端 Ubuntu 22 上实跑的结果：`uid=33(www-data)`、`[7 ms]` 回显、绿色「exp 成功」。
+完整的 S1–S7 流程、产品版本矩阵与能力边界都在同一页：
+
+![面板：案例总览](docs/screenshots/dashboard-overview.png)
+
+---
+
 ## 为什么需要它
 
 同一类工作反复出现同几种失败：

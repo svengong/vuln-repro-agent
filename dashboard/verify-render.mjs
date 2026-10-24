@@ -2,12 +2,34 @@
 // page actually produced its content — case cards, stage timeline, product
 // table, and the demo control. This is the browser-substitute check: it runs
 // the real app.js against real API responses.
-import { JSDOM } from '/home/sven/workspace/dsh-codebuddy-connect/node_modules/jsdom/lib/api.js'
+// jsdom is only needed for these browser-level checks, so resolve it from a
+// few likely locations instead of hard-coding one machine's path. Skipping is
+// explicit: a missing jsdom prints how to get it rather than crashing.
+const jsdomCandidates = [
+  process.env.JSDOM_PATH,
+  'jsdom',
+  new URL('./node_modules/jsdom/lib/api.js', import.meta.url).pathname,
+  new URL('../node_modules/jsdom/lib/api.js', import.meta.url).pathname,
+]
+
+let JSDOM
+for (const cand of jsdomCandidates) {
+  if (!cand) continue
+  try {
+    ({ JSDOM } = await import(cand))
+    break
+  } catch {}
+}
+
+if (!JSDOM) {
+  console.error('[skip] 需要 jsdom 才能跑渲染检查：npm i -D jsdom，或设置 JSDOM_PATH 指向 jsdom/lib/api.js')
+  process.exit(0)
+}
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 const BASE = process.env.BASE || 'http://127.0.0.1:3010'
-const WEB = '/home/sven/workspace/vuln-dashboard/web'
+const WEB = new URL('./web', import.meta.url).pathname
 
 const html = await readFile(join(WEB, 'index.html'), 'utf8')
 const dom = new JSDOM(html, { url: BASE + '/', runScripts: 'outside-only', pretendToBeVisual: true })
